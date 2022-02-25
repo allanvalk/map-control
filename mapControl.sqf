@@ -1,5 +1,5 @@
 // Map sector control by Ares aka FunnyCookieEver >> https://steamcommunity.com/id/funnycookieever/
-// Version 0.16
+// Version 0.18
 
 /*
 0 - neutral
@@ -8,6 +8,38 @@
 3 - resistance
 */
 
+// Init
+
+// Defines
+
+/// west
+
+ARES_WEST_Fireteam = (configfile >> "CfgGroups" >> "West" >> "BLU_F" >> "Infantry" >> "BUS_InfTeam");
+ARES_WEST_Squad = (configfile >> "CfgGroups" >> "West" >> "BLU_F" >> "Infantry" >> "BUS_InfSquad");
+ARES_WEST_AT = (configfile >> "CfgGroups" >> "West" >> "BLU_F" >> "Infantry" >> "BUS_InfTeam_AT");
+ARES_WEST_Officer = "B_Soldier_VR_F";
+
+/// east
+
+ARES_EAST_Fireteam = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" >> "OIA_InfTeam");
+ARES_EAST_Squad = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" >> "OIA_InfSquad");
+ARES_EAST_AT = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" >> "OIA_InfTeam_AT");
+ARES_EAST_Officer = "O_Soldier_VR_F";
+
+/// resistance
+
+ARES_GUER_Fireteam = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry" >> "HAF_InfTeam");
+ARES_GUER_Squad = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry" >> "HAF_InfSquad");
+ARES_GUER_AT = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry" >> "HAF_InfTeam_AT");
+ARES_GUER_Officer = "I_Soldier_VR_F";
+
+/// civilian
+/*
+ARES_CIV_Fireteam = ();
+ARES_CIV_Squad = ();
+ARES_CIV_AT = ();
+ARES_CIV_Officer = "";
+*/
 // Functions
 
 ARES_mapControl = {
@@ -188,9 +220,125 @@ if (isServer) then {
 	if (("autoLoad" call BIS_fnc_getParamValue) == 0) then {
 		[] call ARES_initSectors;
 		[] call ARES_setSector;
+
+		[[3000.03,2999.8,0], 1] call ARES_createSector;
+		[[3000.08,4999.9,0], 2] call ARES_createSector;
+		[[5000.08,4999.96,0], 3] call ARES_createSector;
+		[[5000.01,2999.84,0], 0] call ARES_createSector;
+		[[4001.52,4009.33,0], 0] call ARES_createSector;
+
 		{
 			[_x] spawn ARES_activateSector;
 		} forEach ARES_allControllers;
-		// [[19426.4,1048.89,146.025], 1] call ARES_createSector;
 	};
+};
+
+ARES_defenceSector = {
+	_requestSide = (_this select 0);
+	_requestSideNum = 0;
+
+	switch (_requestSide) do {
+		case west: { _requestSideNum = 1 };
+		case east: { _requestSideNum = 2 };
+		case resistance: { _requestSideNum = 3 };
+		default { };
+	};
+
+	_friendlySectorList = [];
+	_friendlyPotentialSectorList = [];
+	_enemySectorList = [];
+	_enemyPotentialSectorList = [];
+
+	{
+		if (_x getVariable "ARES_sectorController" == _requestSideNum) then {
+			_friendlySectorList pushBack _x;
+		};
+	} forEach ARES_allControllers;
+	
+	{
+		if (_x getVariable "ARES_sectorController" != _requestSideNum && _x getVariable "ARES_sectorController" != 0) then {
+			_enemySectorList pushBack _x;
+		};
+	} forEach ARES_allControllers;
+
+	_nearestSectors = nearestObjects [selectRandom _friendlySectorList, ["Sign_Arrow_F"], 12000];
+	{
+		if (_x getVariable "ARES_sectorController" != _requestSideNum && _x getVariable "ARES_sectorController" != 0) then {
+			_enemyPotentialSectorList pushBack _x;
+		};
+	} forEach _nearestSectors;
+
+	_nearestSectors = nearestObjects [(_enemyPotentialSectorList select 0), ["Sign_Arrow_F"], 12000];
+	{
+		if (_x getVariable "ARES_sectorController" == _requestSideNum) then {
+			_friendlyPotentialSectorList pushBack _x;
+		};
+	} forEach _nearestSectors;
+	
+	_defenceSector = (_friendlyPotentialSectorList select 0);
+	_attackSector = (_enemyPotentialSectorList select 0);
+
+	_enemySide = objNull;
+	_enemySideCfg = objNull;
+
+	switch (_attackSector getVariable "ARES_sectorController") do {
+		case 1: { _enemySide = west };
+		case 2: { _enemySide = east };
+		case 3: { _enemySide = resistance };
+		default { _enemySide = resistance };
+	};
+
+	_enemySideCfgFireteam = call compile (format ["ARES_%1_Fireteam", _enemySide]);
+	_enemySideCfgSquad = call compile (format ["ARES_%1_Squad", _enemySide]);
+	_enemySideCfgAT = call compile (format ["ARES_%1_AT", _enemySide]);
+
+	_targetAssault_1 = [getPos _attackSector, _enemySide, _enemySideCfgSquad] call BIS_fnc_spawnGroup;
+	_targetAssault_2 = [getPos _attackSector, _enemySide, _enemySideCfgSquad] call BIS_fnc_spawnGroup;
+	_targetAssault_3 = [getPos _attackSector, _enemySide, _enemySideCfgFireteam] call BIS_fnc_spawnGroup;
+	_targetAssault_4 = [getPos _attackSector, _enemySide, _enemySideCfgFireteam] call BIS_fnc_spawnGroup;
+	_targetAssault_5 = [getPos _attackSector, _enemySide, _enemySideCfgAT] call BIS_fnc_spawnGroup;
+
+	_attackGroups = [_targetAssault_1, _targetAssault_2, _targetAssault_3, _targetAssault_4, _targetAssault_5];
+	_aliveUnits = 0;
+
+	{
+		_aliveUnits = _aliveUnits + count units _x;
+	} forEach _attackGroups;
+
+	{
+		_wp = _x addWaypoint [getPos _defenceSector, 100];
+		_wp setWaypointType "SAD";
+	} forEach _attackGroups;
+
+	[format ["defenceSector%1", _requestSide], _requestSide, ["Противник планирует атаку на данный сектор. Его необходимо удержать.","Удержать сектор",""], getPos _defenceSector, "CREATED", -1, true, true, "", true] call BIS_fnc_setTask;
+
+	timeout = false;
+
+	[] spawn {
+		sleep 3600;
+		timeout = true;
+	};
+
+	waitUntil {sleep 15, (timeout) || (_defenceSector getVariable "ARES_sectorController" != _requestSideNum) || (({ alive _x } count units _targetAssault_1 <= 1) && ({ alive _x } count units _targetAssault_2 <= 1) &&({ alive _x } count units _targetAssault_3 <= 1) &&({ alive _x } count units _targetAssault_4 <= 0) &&({ alive _x } count units _targetAssault_5 <= 1))};
+
+	if ((format ["defenceSector%1", _requestSide] call BIS_fnc_taskState) == "CANCELED") then {
+		[_defenceSector, _attackSector getVariable "ARES_sectorController", true] call ARES_updateSector;
+	};
+
+	if (_defenceSector getVariable "ARES_sectorController" != _requestSideNum) then {
+		[format ["defenceSector%1", _requestSide],"FAILED"] call BIS_fnc_taskSetState;
+		[_requestSide] remoteExecCall ["ARES_cancelTask", 2];
+	};
+
+	if (timeout || (({ alive _x } count units _targetAssault_1 <= 1) && ({ alive _x } count units _targetAssault_2 <= 1) && ({ alive _x } count units _targetAssault_3 <= 1) && ({ alive _x } count units _targetAssault_4 <= 0) && ({ alive _x } count units _targetAssault_5 <= 1))) then {
+		[format ["defenceSector%1", _requestSide],"SUCCEEDED"] call BIS_fnc_taskSetState;
+		sleep 1;
+		[format ["defenceSector%1", _requestSide],"CREATED"] call BIS_fnc_taskSetState;
+		sleep 0.1;
+		[format ["defenceSector%1", _requestSide]] call BIS_fnc_deleteTask;
+	};
+
+	sleep 120;
+
+	[_attackGroups] call deleteAnything;
 };

@@ -1,0 +1,14 @@
+class CfgNotifications
+{
+	class Default
+	{
+		title = "%1";
+		iconPicture = "%3";
+		iconText = "";
+		description = "%2";
+		color[] = {1,1,1,1};
+		duration = 3;
+		priority = 0;
+		difficulty[] = {};
+	};
+};
