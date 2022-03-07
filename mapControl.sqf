@@ -1,5 +1,5 @@
 // Map sector control by Ares aka FunnyCookieEver >> https://steamcommunity.com/id/funnycookieever/
-// Version 0.18
+// Version 0.26
 
 /*
 0 - neutral
@@ -10,6 +10,16 @@
 
 // Init
 
+ARES_activationDistance = 1000;
+ARES_behaviour = "default";
+ARES_logistics = true;
+
+/* ARES_aiBehaviour
+0 - default
+1 - attack
+2 - defence
+*/
+
 // Defines
 
 /// west
@@ -19,6 +29,12 @@ ARES_WEST_Squad = (configfile >> "CfgGroups" >> "West" >> "BLU_F" >> "Infantry" 
 ARES_WEST_AT = (configfile >> "CfgGroups" >> "West" >> "BLU_F" >> "Infantry" >> "BUS_InfTeam_AT");
 ARES_WEST_Officer = "B_Soldier_VR_F";
 
+ARES_WEST_Support_Vehicles = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
+ARES_WEST_Car_Vehicles = ["B_MRAP_01_F", "B_MRAP_01_hmg_F", "B_MRAP_01_gmg_F"];
+ARES_WEST_APC_Vehicles = ["B_APC_Wheeled_01_cannon_F", "B_APC_Tracked_01_rcws_F"];
+ARES_WEST_Tank_Vehicles = ["B_MBT_01_cannon_F"];
+ARES_WEST_AA_Vehicles = ["B_APC_Tracked_01_AA_F"];
+
 /// east
 
 ARES_EAST_Fireteam = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" >> "OIA_InfTeam");
@@ -26,12 +42,24 @@ ARES_EAST_Squad = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" 
 ARES_EAST_AT = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" >> "OIA_InfTeam_AT");
 ARES_EAST_Officer = "O_Soldier_VR_F";
 
+ARES_EAST_Support_Vehicles = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
+ARES_EAST_Car_Vehicles = ["O_MRAP_02_F", "O_MRAP_02_hmg_F", "O_MRAP_02_gmg_F"];
+ARES_EAST_APC_Vehicles = ["O_APC_Wheeled_02_rcws_v2_F", "O_APC_Tracked_02_cannon_F"];
+ARES_EAST_Tank_Vehicles = ["O_MBT_02_cannon_F"];
+ARES_EAST_AA_Vehicles = ["O_APC_Tracked_02_AA_F"];
+
 /// resistance
 
 ARES_GUER_Fireteam = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry" >> "HAF_InfTeam");
 ARES_GUER_Squad = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry" >> "HAF_InfSquad");
 ARES_GUER_AT = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry" >> "HAF_InfTeam_AT");
 ARES_GUER_Officer = "I_Soldier_VR_F";
+
+ARES_GUER_Support_Vehicles = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
+ARES_GUER_Car_Vehicles = ["I_MRAP_03_F", "I_MRAP_03_hmg_F", "I_MRAP_03_gmg_F"];
+ARES_GUER_APC_Vehicles = ["I_APC_Wheeled_03_cannon_F", "I_APC_tracked_03_cannon_F"];
+ARES_GUER_Tank_Vehicles = ["I_MBT_03_cannon_F"];
+ARES_GUER_AA_Vehicles = ["I_LT_01_AA_F"];
 
 /// civilian
 /*
@@ -41,6 +69,44 @@ ARES_CIV_AT = ();
 ARES_CIV_Officer = "";
 */
 // Functions
+
+ARES_convoyHandler = {
+	params ["_side", "_type", "_start", "_end"];
+
+	_start = [2999.97,3000.25,0];
+	_end = [1999.5,2999.78,0];
+
+	_convoyList = [];
+
+	switch (_type) do {
+		case "general": { 
+			
+		};
+		case "repair": { };
+		case "fuel": { };
+		case "ammo": { };
+		case "trasnport": { };
+		default { };
+	};
+
+	switch (_side) do {
+		case west: { 
+			
+		};
+		case east: {
+
+		};
+		case resistance: { 
+
+		};
+		case civilian: { 
+			
+		};
+		default { };
+	};
+
+	[getPos player, 180, "BMP3", east] call BIS_fnc_spawnVehicle;
+};
 
 ARES_mapControl = {
 	_allSectors = [];
@@ -222,6 +288,7 @@ if (isServer) then {
 		[] call ARES_setSector;
 
 		[[3000.03,2999.8,0], 1] call ARES_createSector;
+		[[1990.06,3003.67,0], 1] call ARES_createSector;
 		[[3000.08,4999.9,0], 2] call ARES_createSector;
 		[[5000.08,4999.96,0], 3] call ARES_createSector;
 		[[5000.01,2999.84,0], 0] call ARES_createSector;
@@ -234,7 +301,8 @@ if (isServer) then {
 };
 
 ARES_defenceSector = {
-	_requestSide = (_this select 0);
+	params ["_requestSide"];
+
 	_requestSideNum = 0;
 
 	switch (_requestSide) do {
