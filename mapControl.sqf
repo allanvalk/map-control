@@ -1,5 +1,5 @@
 // Map sector control by Ares aka FunnyCookieEver >> https://steamcommunity.com/id/funnycookieever/
-// Version 0.26
+// Version 0.27
 
 /*
 0 - neutral
@@ -29,11 +29,11 @@ ARES_WEST_Squad = (configfile >> "CfgGroups" >> "West" >> "BLU_F" >> "Infantry" 
 ARES_WEST_AT = (configfile >> "CfgGroups" >> "West" >> "BLU_F" >> "Infantry" >> "BUS_InfTeam_AT");
 ARES_WEST_Officer = "B_Soldier_VR_F";
 
-ARES_WEST_Support_Vehicles = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
-ARES_WEST_Car_Vehicles = ["B_MRAP_01_F", "B_MRAP_01_hmg_F", "B_MRAP_01_gmg_F"];
-ARES_WEST_APC_Vehicles = ["B_APC_Wheeled_01_cannon_F", "B_APC_Tracked_01_rcws_F"];
-ARES_WEST_Tank_Vehicles = ["B_MBT_01_cannon_F"];
-ARES_WEST_AA_Vehicles = ["B_APC_Tracked_01_AA_F"];
+ARES_WEST_Vehicles_Support = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
+ARES_WEST_Vehicles_Car = ["B_MRAP_01_F", "B_MRAP_01_hmg_F", "B_MRAP_01_gmg_F"];
+ARES_WEST_Vehicles_APC = ["B_APC_Wheeled_01_cannon_F", "B_APC_Tracked_01_rcws_F"];
+ARES_WEST_Vehicles_Tank = ["B_MBT_01_cannon_F"];
+ARES_WEST_Vehicles_AA = ["B_APC_Tracked_01_AA_F"];
 
 /// east
 
@@ -42,11 +42,11 @@ ARES_EAST_Squad = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" 
 ARES_EAST_AT = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" >> "OIA_InfTeam_AT");
 ARES_EAST_Officer = "O_Soldier_VR_F";
 
-ARES_EAST_Support_Vehicles = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
-ARES_EAST_Car_Vehicles = ["O_MRAP_02_F", "O_MRAP_02_hmg_F", "O_MRAP_02_gmg_F"];
-ARES_EAST_APC_Vehicles = ["O_APC_Wheeled_02_rcws_v2_F", "O_APC_Tracked_02_cannon_F"];
-ARES_EAST_Tank_Vehicles = ["O_MBT_02_cannon_F"];
-ARES_EAST_AA_Vehicles = ["O_APC_Tracked_02_AA_F"];
+ARES_EAST_Vehicles_Support = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
+ARES_EAST_Vehicles_Car = ["O_MRAP_02_F", "O_MRAP_02_hmg_F", "O_MRAP_02_gmg_F"];
+ARES_EAST_Vehicles_APC = ["O_APC_Wheeled_02_rcws_v2_F", "O_APC_Tracked_02_cannon_F"];
+ARES_EAST_Vehicles_Tank = ["O_MBT_02_cannon_F"];
+ARES_EAST_Vehicles_AA = ["O_APC_Tracked_02_AA_F"];
 
 /// resistance
 
@@ -55,11 +55,11 @@ ARES_GUER_Squad = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry"
 ARES_GUER_AT = (configfile >> "CfgGroups" >> "Indep" >> "IND_F" >> "Infantry" >> "HAF_InfTeam_AT");
 ARES_GUER_Officer = "I_Soldier_VR_F";
 
-ARES_GUER_Support_Vehicles = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
-ARES_GUER_Car_Vehicles = ["I_MRAP_03_F", "I_MRAP_03_hmg_F", "I_MRAP_03_gmg_F"];
-ARES_GUER_APC_Vehicles = ["I_APC_Wheeled_03_cannon_F", "I_APC_tracked_03_cannon_F"];
-ARES_GUER_Tank_Vehicles = ["I_MBT_03_cannon_F"];
-ARES_GUER_AA_Vehicles = ["I_LT_01_AA_F"];
+ARES_GUER_Vehicles_Support = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
+ARES_GUER_Vehicles_Car = ["I_MRAP_03_F", "I_MRAP_03_hmg_F", "I_MRAP_03_gmg_F"];
+ARES_GUER_Vehicles_APC = ["I_APC_Wheeled_03_cannon_F", "I_APC_tracked_03_cannon_F"];
+ARES_GUER_Vehicles_Tank = ["I_MBT_03_cannon_F"];
+ARES_GUER_Vehicles_AA = ["I_LT_01_AA_F"];
 
 /// civilian
 /*
@@ -73,14 +73,50 @@ ARES_CIV_Officer = "";
 ARES_convoyHandler = {
 	params ["_side", "_type", "_start", "_end"];
 
-	_start = [2999.97,3000.25,0];
-	_end = [1999.5,2999.78,0];
-
 	_convoyList = [];
+	_roadList = [];
+	_safePos = [0,0,0];
+	_sidePrefabString = "ARES_";
+
+	switch (_side) do {
+		case west: { 
+			_sidePrefabString = _sidePrefabString + "WEST";
+		};
+		case east: {
+			_sidePrefabString = _sidePrefabString + "EAST";
+		};
+		case resistance: { 
+			_sidePrefabString = _sidePrefabString + "GUER";
+		};
+		default { };
+	};
 
 	switch (_type) do {
 		case "general": { 
-			
+			_vehiclePrefab = _sidePrefabString + "_Vehicles_Car";
+			_prefab = call compile _vehiclePrefab;
+			_vehicle = [(_prefab select 1)];
+			_convoyList append _vehicle;
+			_vehiclePrefab = _sidePrefabString + "_Vehicles_APC";
+			_prefab = call compile _vehiclePrefab;
+			_vehicle = [(_prefab select 0)];
+			_convoyList append _vehicle;
+			_vehiclePrefab = _sidePrefabString + "_Vehicles_Support";
+			_prefab = call compile _vehiclePrefab;
+			_vehicle = [(_prefab select 0)];
+			_convoyList append _vehicle;
+			_vehiclePrefab = _sidePrefabString + "_Vehicles_Support";
+			_prefab = call compile _vehiclePrefab;
+			_vehicle = [(_prefab select 1)];
+			_convoyList append _vehicle;
+			_vehiclePrefab = _sidePrefabString + "_Vehicles_Support";
+			_prefab = call compile _vehiclePrefab;
+			_vehicle = [(_prefab select 2)];
+			_convoyList append _vehicle;
+			_vehiclePrefab = _sidePrefabString + "_Vehicles_Car";
+			_prefab = call compile _vehiclePrefab;
+			_vehicle = [(_prefab select 0)];
+			_convoyList append _vehicle;
 		};
 		case "repair": { };
 		case "fuel": { };
@@ -89,23 +125,31 @@ ARES_convoyHandler = {
 		default { };
 	};
 
-	switch (_side) do {
-		case west: { 
-			
-		};
-		case east: {
+	hint str _convoyList;
 
-		};
-		case resistance: { 
+	_safePos = [_start, 1, 100, 50, 0, 20, 0] call BIS_fnc_findSafePos;
 
-		};
-		case civilian: { 
-			
-		};
-		default { };
+	_convoyGroup = createGroup _side;
+
+	_convoyGroup setFormation "COLUMN";
+	_convoyGroup setBehaviour "SAFE";
+
+	[_safePos, _start, _end, _side, _convoyGroup, _convoyList] spawn {
+		params ["_safePos", "_start", "_end", "_side", "_convoyGroup", "_convoyList"];
+
+		{
+			_vehicle = [_safePos, ([_start, _end] call BIS_fnc_dirTo), _x, _side] call BIS_fnc_spawnVehicle;
+			if (_forEachIndex == 0) then {
+				_wp = _convoyGroup addWaypoint [_end, 0];
+				_wp setWaypointBehaviour "SAFE";
+				_wp setWaypointFormation "COLUMN";
+				_wp setWaypointSpeed "LIMITED";
+			};
+			(_vehicle select 0) setVehiclePosition [_safePos, [], 0, "CAN_COLLIDE"];
+			units (_vehicle select 2) joinSilent _convoyGroup;
+			waitUntil { (_vehicle select 0) distance _safePos > 15 };
+		} forEach _convoyList;
 	};
-
-	[getPos player, 180, "BMP3", east] call BIS_fnc_spawnVehicle;
 };
 
 ARES_mapControl = {
