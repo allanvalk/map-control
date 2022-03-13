@@ -1,5 +1,5 @@
 // Map sector control by Ares aka FunnyCookieEver >> https://steamcommunity.com/id/funnycookieever/
-// Version 0.28
+// Version 0.29
 
 /*
 0 - neutral
@@ -11,7 +11,7 @@
 // Init
 
 ARES_activationDistance = 1000;
-ARES_behaviour = "default";
+ARES_aiBehaviour = "default";
 ARES_logistics = true;
 
 /* ARES_aiBehaviour
@@ -156,7 +156,6 @@ ARES_convoyHandler = {
 	};
 };
 
-// [west, ARES_WEST_Fireteam, _x] call ARES_populateArea;
 ARES_populateBuilding = {
 	params ["_side", "_group", "_building"];
 
@@ -164,11 +163,12 @@ ARES_populateBuilding = {
 	_popultaionGroup = [getPos _building, _side, _group] call BIS_fnc_spawnGroup;
 
 	{
-		if (count _buildingPositions == 0) exitWith {};
-		_position = selectRandom _buildingPositions;
-		_buildingPositions deleteAt (_buildingPositions findIf {_position in _buildingPositions});
-		_x setPos _position;
-		doStop _x;
+		if (count _buildingPositions != 0) then {
+			_position = selectRandom _buildingPositions;
+			_buildingPositions deleteAt (_buildingPositions findIf {_position in _buildingPositions});
+			_x setPos _position;
+			doStop _x;
+		};
 	} forEach units _popultaionGroup;
 
 	_popultaionGroup;
@@ -178,7 +178,7 @@ ARES_populatePatrol = {
 	params ["_side", "_group", "_sector"];
 
 	_popultaionGroup = [_sector, _side, _group] call BIS_fnc_spawnGroup;
-	[_popultaionGroup, _sector, 150] call BIS_fnc_taskPatrol;
+	[_popultaionGroup, _sector, 100] call BIS_fnc_taskPatrol;
 
 	_popultaionGroup;
 };
@@ -192,9 +192,10 @@ ARES_populateDefence = {
 	_popultaionGroup;
 };
 
-// [west, [2994.79,2996.6,0], 1, false] call ARES_populateArea;
 ARES_populateArea = {
-	params ["_side", "_sector", "_armament", "_civilians"];
+	params ["_side", "_sectorObject", "_armament", "_civilians"];
+
+	_sector = getPos _sectorObject;
 
 	_unitsHandler = [];
 
@@ -227,10 +228,15 @@ ARES_populateArea = {
 	};
 
 	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]);
+	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populateDefence]);
+	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]);
+	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populateDefence]);
+	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]);
 
-	hint str _unitsHandler;
-	
-	GlobalUnitsHandler = _unitsHandler;
+	waitUntil { sleep 60; (({_x distance _sectorController < ARES_activationDistance} count allPlayers) == 0) };
+
+	[_unitsHandler] call deleteAnything;
+	_sectorController setVariable ["ARES_sectorActive", false, true];
 };
 
 ARES_mapControl = {
@@ -255,9 +261,10 @@ ARES_initSectors = {
 	} forEach _allSectorsLocations;
 
 	{
-		_sectorController = createVehicle ["Sign_Arrow_F", _x];
+		_sectorController = createVehicle ["Helper_Base_F", _x];
 		_sectorController setVehiclePosition [getPos _sectorController, [], 0, "CAN_COLLIDE"];
 		_sectorController setVariable ["ARES_sectorController", 0, true];
+		_sectorController setVariable ["ARES_sectorActive", false, true];
 		hideObjectGlobal _sectorController;
 		_sectorController enableSimulationGlobal false;
 		_allControllers pushBack _sectorController; 
@@ -337,6 +344,15 @@ ARES_activateSector = {
 			};
 			deleteMarker _sectorMarker;
 		};
+		if ((({_x distance _sectorController < ARES_activationDistance} count allPlayers) > 0) && (_sectorController getVariable "ARES_sectorActive" != true)) then {
+			_sectorController setVariable ["ARES_sectorActive", true, true];
+			switch (_sectorController getVariable "ARES_sectorController") do {
+				case 1: { [west, _sectorController, 1, false] call ARES_populateArea; };
+				case 2: { [east, _sectorController, 1, false] call ARES_populateArea; };
+				case 3: { [resistance, _sectorController, 1, false] call ARES_populateArea; };
+				default {  };
+			};
+		};
 		sleep 60;
 	};
 };
@@ -369,9 +385,10 @@ ARES_createSector = {
 	if (!isServer) exitWith {};
 	params ["_position", "_side"];
 	
-	_sectorController = createVehicle ["Sign_Arrow_F", _position];
+	_sectorController = createVehicle ["Helper_Base_F", _position];
 	_sectorController setVehiclePosition [getPos _sectorController, [], 0, "CAN_COLLIDE"];
 	_sectorController setVariable ["ARES_sectorController", 0, true];
+	_sectorController setVariable ["ARES_sectorActive", false, true];
 	hideObjectGlobal _sectorController;
 	_sectorController enableSimulationGlobal false;
 	ARES_allControllers pushBack _sectorController; 
@@ -433,14 +450,14 @@ ARES_defenceSector = {
 		};
 	} forEach ARES_allControllers;
 
-	_nearestSectors = nearestObjects [selectRandom _friendlySectorList, ["Sign_Arrow_F"], 12000];
+	_nearestSectors = nearestObjects [selectRandom _friendlySectorList, ["Helper_Base_F"], 12000];
 	{
 		if (_x getVariable "ARES_sectorController" != _requestSideNum && _x getVariable "ARES_sectorController" != 0) then {
 			_enemyPotentialSectorList pushBack _x;
 		};
 	} forEach _nearestSectors;
 
-	_nearestSectors = nearestObjects [(_enemyPotentialSectorList select 0), ["Sign_Arrow_F"], 12000];
+	_nearestSectors = nearestObjects [(_enemyPotentialSectorList select 0), ["Helper_Base_F"], 12000];
 	{
 		if (_x getVariable "ARES_sectorController" == _requestSideNum) then {
 			_friendlyPotentialSectorList pushBack _x;

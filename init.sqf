@@ -23,3 +23,11 @@ deleteAnything = {
 		};
 	} forEach _input;
 };
+
+[] spawn {
+	sleep 15;
+	while {true} do {
+		game removeCuratorEditableObjects [ARES_allControllers, true];
+		sleep 5;
+	};
+};
