@@ -1,5 +1,5 @@
 // Map sector control by Ares aka FunnyCookieEver >> https://steamcommunity.com/id/funnycookieever/
-// Version 0.27
+// Version 0.28
 
 /*
 0 - neutral
@@ -42,7 +42,7 @@ ARES_EAST_Squad = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" 
 ARES_EAST_AT = (configfile >> "CfgGroups" >> "East" >> "OPF_F" >> "Infantry" >> "OIA_InfTeam_AT");
 ARES_EAST_Officer = "O_Soldier_VR_F";
 
-ARES_EAST_Vehicles_Support = ["B_Truck_01_Repair_F", "B_Truck_01_fuel_F", "B_Truck_01_ammo_F"];
+ARES_EAST_Vehicles_Support = ["O_Truck_03_repair_F", "O_Truck_03_fuel_F", "O_Truck_03_ammo_F"];
 ARES_EAST_Vehicles_Car = ["O_MRAP_02_F", "O_MRAP_02_hmg_F", "O_MRAP_02_gmg_F"];
 ARES_EAST_Vehicles_APC = ["O_APC_Wheeled_02_rcws_v2_F", "O_APC_Tracked_02_cannon_F"];
 ARES_EAST_Vehicles_Tank = ["O_MBT_02_cannon_F"];
@@ -125,31 +125,112 @@ ARES_convoyHandler = {
 		default { };
 	};
 
-	hint str _convoyList;
-
 	_safePos = [_start, 1, 100, 50, 0, 20, 0] call BIS_fnc_findSafePos;
 
 	_convoyGroup = createGroup _side;
+	_convoyVehicles = [];
 
 	_convoyGroup setFormation "COLUMN";
 	_convoyGroup setBehaviour "SAFE";
 
-	[_safePos, _start, _end, _side, _convoyGroup, _convoyList] spawn {
-		params ["_safePos", "_start", "_end", "_side", "_convoyGroup", "_convoyList"];
+	[_safePos, _start, _end, _side, _convoyGroup, _convoyList, _convoyVehicles] spawn {
+		params ["_safePos", "_start", "_end", "_side", "_convoyGroup", "_convoyList", "_convoyVehicles"];
 
 		{
 			_vehicle = [_safePos, ([_start, _end] call BIS_fnc_dirTo), _x, _side] call BIS_fnc_spawnVehicle;
+			_convoyVehicles append [(_vehicle select 0)];
 			if (_forEachIndex == 0) then {
-				_wp = _convoyGroup addWaypoint [_end, 0];
-				_wp setWaypointBehaviour "SAFE";
-				_wp setWaypointFormation "COLUMN";
-				_wp setWaypointSpeed "LIMITED";
+				_waypoint = _convoyGroup addWaypoint [_end, 0];
+				_waypoint setWaypointBehaviour "SAFE";
+				_waypoint setWaypointFormation "COLUMN";
+				_waypoint setWaypointSpeed "LIMITED";
 			};
 			(_vehicle select 0) setVehiclePosition [_safePos, [], 0, "CAN_COLLIDE"];
 			units (_vehicle select 2) joinSilent _convoyGroup;
 			waitUntil { (_vehicle select 0) distance _safePos > 15 };
 		} forEach _convoyList;
+		_waypoint = currentWaypoint _convoyGroup;
+		systemChat str _convoyGroup;
+		systemChat str _convoyVehicles; // Заебался не работает, здесь была жопа индуса
+		[_convoyGroup, _waypoint] setWaypointStatements ["true", "[[_convoyGroup]] call deleteAnything; [[_convoyVehicles]] call deleteAnything;"];
 	};
+};
+
+// [west, ARES_WEST_Fireteam, _x] call ARES_populateArea;
+ARES_populateBuilding = {
+	params ["_side", "_group", "_building"];
+
+	_buildingPositions = [_building] call BIS_fnc_buildingPositions;
+	_popultaionGroup = [getPos _building, _side, _group] call BIS_fnc_spawnGroup;
+
+	{
+		if (count _buildingPositions == 0) exitWith {};
+		_position = selectRandom _buildingPositions;
+		_buildingPositions deleteAt (_buildingPositions findIf {_position in _buildingPositions});
+		_x setPos _position;
+		doStop _x;
+	} forEach units _popultaionGroup;
+
+	_popultaionGroup;
+};
+
+ARES_populatePatrol = {
+	params ["_side", "_group", "_sector"];
+
+	_popultaionGroup = [_sector, _side, _group] call BIS_fnc_spawnGroup;
+	[_popultaionGroup, _sector, 150] call BIS_fnc_taskPatrol;
+
+	_popultaionGroup;
+};
+
+ARES_populateDefence = {
+	params ["_side", "_group", "_sector"];
+
+	_popultaionGroup = [_sector, _side, _group] call BIS_fnc_spawnGroup;
+	[_popultaionGroup, _sector] call BIS_fnc_taskDefend;
+
+	_popultaionGroup;
+};
+
+// [west, [2994.79,2996.6,0], 1, false] call ARES_populateArea;
+ARES_populateArea = {
+	params ["_side", "_sector", "_armament", "_civilians"];
+
+	_unitsHandler = [];
+
+	_sidePrefabString = "ARES_";
+	
+	_buildings = nearestObjects [_sector, ["house"], 300];
+	_populationFloor = floor (count _buildings / 3);
+
+	switch (_side) do {
+		case west: { 
+			_sidePrefabString = _sidePrefabString + "WEST";
+		};
+		case east: {
+			_sidePrefabString = _sidePrefabString + "EAST";
+		};
+		case resistance: { 
+			_sidePrefabString = _sidePrefabString + "GUER";
+		};
+		default { };
+	};
+
+	_groupPrefab = _sidePrefabString + "_Fireteam";
+	_prefab = call compile _groupPrefab;
+
+	for [{ private _i = 0 }, { _i < _populationFloor }, { _i = _i + 1 }] do {
+		_building = selectRandom _buildings;
+		_buildings deleteAt (_buildings findIf {_building in _buildings});
+
+		_unitsHandler append ([[_side, _prefab, _building] call ARES_populateBuilding]);
+	};
+
+	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]);
+
+	hint str _unitsHandler;
+	
+	GlobalUnitsHandler = _unitsHandler;
 };
 
 ARES_mapControl = {
@@ -323,27 +404,6 @@ ARES_loadSectors = {
 	} forEach _savedSectors;
 };
 
-// Init
-
-if (isServer) then {
-	[] call ARES_mapControl;
-	if (("autoLoad" call BIS_fnc_getParamValue) == 0) then {
-		[] call ARES_initSectors;
-		[] call ARES_setSector;
-
-		[[3000.03,2999.8,0], 1] call ARES_createSector;
-		[[1990.06,3003.67,0], 1] call ARES_createSector;
-		[[3000.08,4999.9,0], 2] call ARES_createSector;
-		[[5000.08,4999.96,0], 3] call ARES_createSector;
-		[[5000.01,2999.84,0], 0] call ARES_createSector;
-		[[4001.52,4009.33,0], 0] call ARES_createSector;
-
-		{
-			[_x] spawn ARES_activateSector;
-		} forEach ARES_allControllers;
-	};
-};
-
 ARES_defenceSector = {
 	params ["_requestSide"];
 
@@ -453,4 +513,25 @@ ARES_defenceSector = {
 	sleep 120;
 
 	[_attackGroups] call deleteAnything;
+};
+
+// Init
+
+if (isServer) then {
+	[] call ARES_mapControl;
+	if (("autoLoad" call BIS_fnc_getParamValue) == 0) then {
+		[] call ARES_initSectors;
+		[] call ARES_setSector;
+
+		[[3000.03,2999.8,0], 1] call ARES_createSector;
+		[[1990.06,3003.67,0], 1] call ARES_createSector;
+		[[3000.08,4999.9,0], 2] call ARES_createSector;
+		[[5000.08,4999.96,0], 3] call ARES_createSector;
+		[[5000.01,2999.84,0], 0] call ARES_createSector;
+		[[4001.52,4009.33,0], 0] call ARES_createSector;
+
+		{
+			[_x] spawn ARES_activateSector;
+		} forEach ARES_allControllers;
+	};
 };
