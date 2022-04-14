@@ -1,7 +1,7 @@
 // Map sector control by Ares aka FunnyCookieEver >> https://steamcommunity.com/id/funnycookieever/
-// Version 0.29
+// Version 0.30
 
-/*
+/* Side codes
 0 - neutral
 1 - west
 2 - east
@@ -13,6 +13,11 @@
 ARES_activationDistance = 1000;
 ARES_aiBehaviour = "default";
 ARES_logistics = true;
+ARES_activeFactions = [resistance];
+
+/* ARES_logistics
+Enable ambient logistic routes and logistic system
+*/
 
 /* ARES_aiBehaviour
 0 - default
@@ -71,12 +76,13 @@ ARES_CIV_Officer = "";
 // Functions
 
 ARES_convoyHandler = {
-	params ["_side", "_type", "_start", "_end"];
+	params ["_side", "_type", "_startSector", "_endSector"];
 
 	_convoyList = [];
 	_roadList = [];
-	_safePos = [0,0,0];
 	_sidePrefabString = "ARES_";
+	_start = getPosATL ([getPosATL _startSector, 300] call BIS_fnc_nearestRoad);
+	_end = getPosATL ([getPosATL _endSector, 300] call BIS_fnc_nearestRoad);
 
 	switch (_side) do {
 		case west: { 
@@ -125,19 +131,17 @@ ARES_convoyHandler = {
 		default { };
 	};
 
-	_safePos = [_start, 1, 100, 50, 0, 20, 0] call BIS_fnc_findSafePos;
-
 	_convoyGroup = createGroup _side;
 	_convoyVehicles = [];
 
 	_convoyGroup setFormation "COLUMN";
 	_convoyGroup setBehaviour "SAFE";
 
-	[_safePos, _start, _end, _side, _convoyGroup, _convoyList, _convoyVehicles] spawn {
-		params ["_safePos", "_start", "_end", "_side", "_convoyGroup", "_convoyList", "_convoyVehicles"];
+	[_start, _end, _side, _convoyGroup, _convoyList, _convoyVehicles] spawn {
+		params ["_start", "_end", "_side", "_convoyGroup", "_convoyList", "_convoyVehicles"];
 
 		{
-			_vehicle = [_safePos, ([_start, _end] call BIS_fnc_dirTo), _x, _side] call BIS_fnc_spawnVehicle;
+			_vehicle = [_start, ([_start, _end] call BIS_fnc_dirTo), _x, _side] call BIS_fnc_spawnVehicle;
 			_convoyVehicles append [(_vehicle select 0)];
 			if (_forEachIndex == 0) then {
 				_waypoint = _convoyGroup addWaypoint [_end, 0];
@@ -145,14 +149,47 @@ ARES_convoyHandler = {
 				_waypoint setWaypointFormation "COLUMN";
 				_waypoint setWaypointSpeed "LIMITED";
 			};
-			(_vehicle select 0) setVehiclePosition [_safePos, [], 0, "CAN_COLLIDE"];
+			(_vehicle select 0) setVehiclePosition [_start, [], 0, "CAN_COLLIDE"];
 			units (_vehicle select 2) joinSilent _convoyGroup;
-			waitUntil { (_vehicle select 0) distance _safePos > 15 };
+			waitUntil { (_vehicle select 0) distance _start > 15 };
 		} forEach _convoyList;
 		_waypoint = currentWaypoint _convoyGroup;
-		systemChat str _convoyGroup;
-		systemChat str _convoyVehicles; // Заебался не работает, здесь была жопа индуса
 		[_convoyGroup, _waypoint] setWaypointStatements ["true", "[[_convoyGroup]] call deleteAnything; [[_convoyVehicles]] call deleteAnything;"];
+	};
+};
+
+ARES_convoyAmbientController = { // TODO: Add deletion on completion functionality
+	sleep 300;
+
+	while {ARES_logistics} do {
+
+		_requestSideNum = 0;
+		_sideSectorList = [];
+
+		_currentSide = selectRandom ARES_activeFactions;
+
+		switch (_currentSide) do {
+			case west: { _requestSideNum = 1 };
+			case east: { _requestSideNum = 2 };
+			case resistance: { _requestSideNum = 3 };
+			default { };
+		};
+
+		{
+			if (_x getVariable "ARES_sectorController" == _requestSideNum) then {
+				_sideSectorList pushBack _x;
+			};
+		} forEach ARES_allControllers;
+
+		_startSector = selectRandom _sideSectorList;
+
+		_sideSectorList = _sideSectorList - [_startSector];
+
+		_endSector = selectRandom _sideSectorList;
+
+		[_currentSide, "general", _startSector, _endSector] call ARES_convoyHandler;
+
+		sleep 1800;
 	};
 };
 
@@ -168,6 +205,8 @@ ARES_populateBuilding = {
 			_buildingPositions deleteAt (_buildingPositions findIf {_position in _buildingPositions});
 			_x setPos _position;
 			doStop _x;
+		} else {
+			deleteVehicle _x;
 		};
 	} forEach units _popultaionGroup;
 
@@ -186,8 +225,11 @@ ARES_populatePatrol = {
 ARES_populateDefence = {
 	params ["_side", "_group", "_sector"];
 
-	_popultaionGroup = [_sector, _side, _group] call BIS_fnc_spawnGroup;
-	[_popultaionGroup, _sector] call BIS_fnc_taskDefend;
+	_randomPosition = _sector getPos [random 250, random 90];
+	_safePosition = [_randomPosition, 0, 150, 5, 0, 20, 0] call BIS_fnc_findSafePos;
+
+	_popultaionGroup = [_safePosition, _side, _group] call BIS_fnc_spawnGroup;
+	[_popultaionGroup, _safePosition] call BIS_fnc_taskDefend;
 
 	_popultaionGroup;
 };
@@ -204,6 +246,9 @@ ARES_populateArea = {
 	_buildings = nearestObjects [_sector, ["house"], 300];
 	_populationFloor = floor (count _buildings / 3);
 
+	_groupPrefab = "";
+	_prefab = call compile _groupPrefab;
+
 	switch (_side) do {
 		case west: { 
 			_sidePrefabString = _sidePrefabString + "WEST";
@@ -217,21 +262,28 @@ ARES_populateArea = {
 		default { };
 	};
 
-	_groupPrefab = _sidePrefabString + "_Fireteam";
-	_prefab = call compile _groupPrefab;
-
 	for [{ private _i = 0 }, { _i < _populationFloor }, { _i = _i + 1 }] do {
 		_building = selectRandom _buildings;
-		_buildings deleteAt (_buildings findIf {_building in _buildings});
+		_buildings = _buildings - [_building];
+
+		if (count ([_building] call BIS_fnc_buildingPositions) > 6) then {
+			_groupPrefab = _sidePrefabString + "_Squad";
+			_prefab = call compile _groupPrefab;
+		} else {
+			_groupPrefab = _sidePrefabString + "_Fireteam";
+			_prefab = call compile _groupPrefab;
+		};
 
 		_unitsHandler append ([[_side, _prefab, _building] call ARES_populateBuilding]);
 	};
 
-	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]);
-	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populateDefence]);
-	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]);
-	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populateDefence]);
-	_unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]);
+	for [{ private _i = 0 }, { _i < _populationFloor }, { _i = _i + 1 }] do {
+		switch (selectRandom [0, 1]) do {
+			case 0: { _unitsHandler append ([[_side, _prefab, _sector] call ARES_populatePatrol]); };
+			case 1: { _unitsHandler append ([[_side, _prefab, _sector] call ARES_populateDefence]); };
+			default { };
+		};
+	};
 
 	waitUntil { sleep 60; (({_x distance _sectorController < ARES_activationDistance} count allPlayers) == 0) };
 
@@ -250,7 +302,7 @@ ARES_mapControl = {
 };
 
 ARES_initSectors = {
-	_allSectorsLocations = nearestLocations [mapCenter, ["NameCity", "NameCityCapital", "NameVillage"], 12000];
+	_allSectorsLocations = nearestLocations [mapCenter, ["Name", "NameCity", "NameCityCapital", "NameVillage"], 12000];
 
 	_allSectors = [];
 	_allControllers = [];
@@ -550,5 +602,7 @@ if (isServer) then {
 		{
 			[_x] spawn ARES_activateSector;
 		} forEach ARES_allControllers;
+
+		[] spawn ARES_convoyAmbientController;
 	};
 };
