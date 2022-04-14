@@ -1,5 +1,5 @@
 // Map sector control by Ares aka FunnyCookieEver >> https://steamcommunity.com/id/funnycookieever/
-// Version 0.30
+// Version 0.31
 
 /* Side codes
 0 - neutral
@@ -14,15 +14,28 @@ ARES_activationDistance = 1000;
 ARES_aiBehaviour = "default";
 ARES_logistics = true;
 ARES_activeFactions = [resistance];
+ARES_defaultResources = [100, 100, 100];
 
-/* ARES_logistics
-Enable ambient logistic routes and logistic system
-*/
+ARES_defaultResourcesWEST = [25, 25, 25];
+ARES_defaultResourcesEAST = [0, 0, 0];
+ARES_defaultResourcesGUER = [100, 100, 100];
 
 /* ARES_aiBehaviour
 0 - default
 1 - attack
 2 - defence
+*/
+
+/* ARES_logistics
+Enable ambient logistic routes and logistic system
+*/
+
+/* ARES_defaultResources
+Initial amount of resources for each sector [repair, fuel, ammo] (0 / 100)
+*/
+
+/* ARES_defaultResourcesSIDE
+Edit only if values deviate for each side
 */
 
 // Defines
@@ -237,14 +250,19 @@ ARES_populateDefence = {
 ARES_populateArea = {
 	params ["_side", "_sectorObject", "_armament", "_civilians"];
 
-	_sector = getPos _sectorObject;
-
 	_unitsHandler = [];
+
+	_sector = getPos _sectorObject;
+	_sectorResources = _sectorObject getVariable "ARES_sectorController";
+
+	systemChat str _sectorResources;
+
+	_populationCalculated = ((_sectorResources select 0) + (_sectorResources select 1) + (_sectorResources select 2)) / 100;
 
 	_sidePrefabString = "ARES_";
 	
 	_buildings = nearestObjects [_sector, ["house"], 300];
-	_populationFloor = floor (count _buildings / 3);
+	_populationFloor = floor (count _buildings / 3 * _populationCalculated);
 
 	_groupPrefab = "";
 	_prefab = call compile _groupPrefab;
@@ -317,6 +335,7 @@ ARES_initSectors = {
 		_sectorController setVehiclePosition [getPos _sectorController, [], 0, "CAN_COLLIDE"];
 		_sectorController setVariable ["ARES_sectorController", 0, true];
 		_sectorController setVariable ["ARES_sectorActive", false, true];
+		_sectorController setVariable ["ARES_sectorResources", ARES_defaultResources, true];
 		hideObjectGlobal _sectorController;
 		_sectorController enableSimulationGlobal false;
 		_allControllers pushBack _sectorController; 
@@ -332,9 +351,24 @@ ARES_initSectors = {
 
 ARES_setSector = {
 	{
-		if (_x inArea "AO_BLUFOR" || _x inArea "AO_BLUFOR_1" || _x inArea "AO_BLUFOR_2" || _x inArea "AO_BLUFOR_3") then { [_x, 1, false] call ARES_updateSector; };
-		if (_x inArea "AO_OPFOR" || _x inArea "AO_OPFOR_1" || _x inArea "AO_OPFOR_2" || _x inArea "AO_OPFOR_3") then { [_x, 2, false] call ARES_updateSector; };
-		if (_x inArea "AO_GUER" || _x inArea "AO_GUER_1" || _x inArea "AO_GUER_2" || _x inArea "AO_GUER_3") then { [_x, 3, false] call ARES_updateSector; };
+		if (_x inArea "AO_BLUFOR" || _x inArea "AO_BLUFOR_1" || _x inArea "AO_BLUFOR_2" || _x inArea "AO_BLUFOR_3") then {
+			[_x, 1, false] call ARES_updateSector; 
+			if (ARES_defaultResourcesWEST != [0, 0, 0]) then {
+				_x setVariable ["ARES_sectorResources", ARES_defaultResourcesWEST, true];
+			};
+		};
+		if (_x inArea "AO_OPFOR" || _x inArea "AO_OPFOR_1" || _x inArea "AO_OPFOR_2" || _x inArea "AO_OPFOR_3") then { 
+			[_x, 2, false] call ARES_updateSector; 
+			if (ARES_defaultResourcesEAST != [0, 0, 0]) then {
+				_x setVariable ["ARES_sectorResources", ARES_defaultResourcesEAST, true];
+			};
+		};
+		if (_x inArea "AO_GUER" || _x inArea "AO_GUER_1" || _x inArea "AO_GUER_2" || _x inArea "AO_GUER_3") then { 
+			[_x, 3, false] call ARES_updateSector;
+			if (ARES_defaultResourcesGUER != [0, 0, 0]) then {
+				_x setVariable ["ARES_sectorResources", ARES_defaultResourcesGUER, true];
+			};
+		};
 	} forEach ARES_allControllers;
 };
 
@@ -441,6 +475,7 @@ ARES_createSector = {
 	_sectorController setVehiclePosition [getPos _sectorController, [], 0, "CAN_COLLIDE"];
 	_sectorController setVariable ["ARES_sectorController", 0, true];
 	_sectorController setVariable ["ARES_sectorActive", false, true];
+	_sectorController setVariable ["ARES_sectorResources", ARES_defaultResources, true];
 	hideObjectGlobal _sectorController;
 	_sectorController enableSimulationGlobal false;
 	ARES_allControllers pushBack _sectorController; 
@@ -592,17 +627,17 @@ if (isServer) then {
 		[] call ARES_initSectors;
 		[] call ARES_setSector;
 
-		[[3000.03,2999.8,0], 1] call ARES_createSector;
+		/*[[3000.03,2999.8,0], 1] call ARES_createSector;
 		[[1990.06,3003.67,0], 1] call ARES_createSector;
 		[[3000.08,4999.9,0], 2] call ARES_createSector;
 		[[5000.08,4999.96,0], 3] call ARES_createSector;
 		[[5000.01,2999.84,0], 0] call ARES_createSector;
-		[[4001.52,4009.33,0], 0] call ARES_createSector;
+		[[4001.52,4009.33,0], 0] call ARES_createSector;*/
 
 		{
 			[_x] spawn ARES_activateSector;
 		} forEach ARES_allControllers;
 
-		[] spawn ARES_convoyAmbientController;
+		//[] spawn ARES_convoyAmbientController;
 	};
 };
